@@ -13,9 +13,9 @@ Use these files as context when designing in Pencil, Figma, v0, or collaborating
 
 ---
 
-## Statusline Setup
+## Claude Code Statusline
 
-Claude Code statusline showing branch, model, balance, spend, and service status.
+Real-time dynamic statusline showing git, model, tokens, session time, files, and MCPs.
 
 ### Quick Setup
 
@@ -23,29 +23,31 @@ Claude Code statusline showing branch, model, balance, spend, and service status
 bash setup-statusline.sh
 ```
 
-Then edit `~/.claude/statusline-command.sh` and update lines 7-8:
-```bash
-MONTHLY_BUDGET=150.00     # your monthly budget
-ACCOUNT_BALANCE=24.91     # your current balance
+### What it shows
+
 ```
+a3f92b1 | Claude Haiku 3.5 | $0.0041 | 00:23 | 3 changed | mcp:pencil
+```
+
+Fields (left to right):
+- Last commit ID (7-char hash) — dim
+- Claude model name — yellow
+- Token cost of last command — green/red
+- Session elapsed time — cyan
+- Files changed in git — red/green
+- Connected MCPs — blue
+
+### Dynamic Updates
+
+- **Commit hash** — updates when you switch directories
+- **Model** — from current Claude Code session
+- **Token cost** — computed from API response
+- **Session time** — tracked automatically
+- **Files changed** — git diff vs HEAD
+- **MCPs** — from settings.json configuration
 
 ### Files
 
 - **statusline-command.sh** — the statusline script
-- **monthly-spend.json** — tracks monthly spending (auto-reset on 1st)
-- **ytd-spend.json** — year-to-date spending totals
+- **session-starts.json** — session timing data
 - **setup-statusline.sh** — one-command installer
-
-### What it shows
-
-```
- main | Claude Haiku 3.5 | $38.20 left | $1.80/$40 | $189.90 ytd | Systems Online
-```
-
-Fields (left to right):
-- Git branch (cyan)
-- Claude model (yellow)
-- Balance remaining (green/yellow/red)
-- Monthly spend vs budget (green/yellow/red)
-- Year-to-date spend (green/yellow/red)
-- Anthropic service status (green/red)

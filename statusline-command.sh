@@ -1,182 +1,138 @@
 #!/usr/bin/env bash
 # Claude Code status line script
-# Fields: git branch | model | balance | monthly spend | ytd spend | claude status
+# Fields: commit hash | model | token cost | session time | files changed | MCPs
 
-# ---------------------------------------------------------------
-# USER CONFIG — edit these two values to match your Anthropic plan
-MONTHLY_BUDGET=40.00      # USD: your monthly Claude Code spend budget
-ACCOUNT_BALANCE=40.00     # USD: current prepaid credit balance (update manually when you top up)
-# ---------------------------------------------------------------
-
-SPEND_FILE="${HOME}/.claude/monthly-spend.json"
-YTD_FILE="${HOME}/.claude/ytd-spend.json"
-THIS_MONTH=$(date +%Y-%m)
-THIS_YEAR=$(date +%Y)
+SESSIONS_FILE="${HOME}/.claude/session-starts.json"
+SETTINGS_FILE="${HOME}/.claude/settings.json"
 
 # ANSI colors
 C_RESET='\033[0m'
 C_DIM='\033[2m'
+C_BLUE='\033[34m'
 C_CYAN='\033[36m'
 C_YELLOW='\033[33m'
 C_GREEN='\033[32m'
 C_RED='\033[31m'
 
 input=$(cat)
+now=$(date +%s)
 
 # =============================================================
-# 1. Git branch
+# 1. Last commit hash (7-char short SHA) — dim
 # =============================================================
 cwd=$(echo "$input" | jq -r '.cwd // .workspace.current_dir // ""')
-git_branch=""
+commit_hash=""
+files_changed=0
 if [ -n "$cwd" ]; then
-  git_branch=$(git -C "$cwd" --no-optional-locks symbolic-ref --short HEAD 2>/dev/null)
+  commit_hash=$(git -C "$cwd" --no-optional-locks \
+    log -1 --pretty=format:%h 2>/dev/null)
+  # Count files with uncommitted changes (staged + unstaged)
+  files_changed=$(git -C "$cwd" --no-optional-locks \
+    diff --name-only HEAD 2>/dev/null | wc -l | tr -d ' ')
 fi
 
 # =============================================================
-# 2. Model name
+# 2. Model name — yellow
 # =============================================================
 model=$(echo "$input" | jq -r '.model.display_name // "Unknown"')
 
 # =============================================================
-# 3 & 4. Monthly spend tracking -> balance + budget fields
-# spend file schema: { "month": "YYYY-MM", "sessions": { "<id>": <cost_float> } }
-# Each session key holds the cost of the most recent API call for that session.
+# 3. Token cost of last command — green if cheap, red if expensive
+# Threshold: >= $0.10 per call is "expensive" (red)
+# Pricing: input $3/M, output $15/M, cache_write $3.75/M, cache_read $0.30/M
 # =============================================================
-session_id=$(echo "$input" | jq -r '.session_id // ""')
 current=$(echo "$input" | jq -r '.context_window.current_usage // empty')
 call_cost_raw=0
-
 if [ -n "$current" ]; then
-  input_tokens=$(echo "$current" | jq -r '.input_tokens // 0')
-  output_tokens=$(echo "$current" | jq -r '.output_tokens // 0')
-  cache_read=$(echo "$current" | jq -r '.cache_read_input_tokens // 0')
-  cache_write=$(echo "$current" | jq -r '.cache_creation_input_tokens // 0')
-  # Pricing: input $3/M, output $15/M, cache_write $3.75/M, cache_read $0.30/M
+  in_tok=$(echo "$current"  | jq -r '.input_tokens // 0')
+  out_tok=$(echo "$current" | jq -r '.output_tokens // 0')
+  c_read=$(echo "$current"  | jq -r '.cache_read_input_tokens // 0')
+  c_write=$(echo "$current" | jq -r '.cache_creation_input_tokens // 0')
   call_cost_raw=$(awk "BEGIN {
-    printf \"%.6f\", ($input_tokens * 3 + $output_tokens * 15 + $cache_write * 3.75 + $cache_read * 0.30) / 1000000
+    printf \"%.6f\", ($in_tok * 3 + $out_tok * 15 + $c_write * 3.75 + $c_read * 0.30) / 1000000
   }")
 fi
-
-# Reset spend file if missing or it's a new month
-if [ ! -f "$SPEND_FILE" ]; then
-  echo "{\"month\":\"${THIS_MONTH}\",\"sessions\":{}}" > "$SPEND_FILE"
-else
-  file_month=$(jq -r '.month // ""' "$SPEND_FILE" 2>/dev/null)
-  if [ "$file_month" != "$THIS_MONTH" ]; then
-    echo "{\"month\":\"${THIS_MONTH}\",\"sessions\":{}}" > "$SPEND_FILE"
-  fi
-fi
-
-# Write latest call cost for this session
-if [ -n "$session_id" ] && [ "$call_cost_raw" != "0" ] && [ "$call_cost_raw" != "0.000000" ]; then
-  jq --arg sid "$session_id" --argjson cost "$call_cost_raw" \
-    '.sessions[$sid] = $cost' "$SPEND_FILE" > "${SPEND_FILE}.tmp" 2>/dev/null \
-    && mv "${SPEND_FILE}.tmp" "$SPEND_FILE"
-fi
-
-# Sum all sessions for month-to-date spend
-monthly_spend=$(jq '[.sessions | to_entries[] | .value] | add // 0' "$SPEND_FILE" 2>/dev/null)
-monthly_spend=${monthly_spend:-0}
-
-# --- YTD spend tracking ---
-# ytd file schema: { "year": "YYYY", "months": { "YYYY-MM": <spend_float> } }
-# Each month key stores that month's total spend; summing all gives YTD.
-if [ ! -f "$YTD_FILE" ]; then
-  echo "{\"year\":\"${THIS_YEAR}\",\"months\":{}}" > "$YTD_FILE"
-else
-  file_year=$(jq -r '.year // ""' "$YTD_FILE" 2>/dev/null)
-  if [ "$file_year" != "$THIS_YEAR" ]; then
-    echo "{\"year\":\"${THIS_YEAR}\",\"months\":{}}" > "$YTD_FILE"
-  fi
-fi
-# Always sync current month's total into the YTD file
-jq --arg month "$THIS_MONTH" --argjson spend "$monthly_spend" \
-  '.months[$month] = $spend' "$YTD_FILE" > "${YTD_FILE}.tmp" 2>/dev/null \
-  && mv "${YTD_FILE}.tmp" "$YTD_FILE"
-ytd_spend=$(jq '[.months | to_entries[] | .value] | add // 0' "$YTD_FILE" 2>/dev/null)
-ytd_spend=${ytd_spend:-0}
-
-# --- Balance (field 3) ---
-balance_val=$(awk "BEGIN { printf \"%.2f\", $ACCOUNT_BALANCE - $monthly_spend }")
-balance_fmt="\$${balance_val}"
-# Green > 50% remaining, yellow 20-50%, red <= 20%
-BAL_C=$(awk -v bal="$balance_val" -v acct="$ACCOUNT_BALANCE" \
-  -v g="$C_GREEN" -v y="$C_YELLOW" -v r="$C_RED" \
-  'BEGIN { ratio = bal / acct; if (ratio > 0.50) print g; else if (ratio > 0.20) print y; else print r }')
-
-# --- Monthly spend vs budget (field 4) ---
-spend_fmt=$(awk "BEGIN {
-  s = $monthly_spend
-  if (s < 0.01) printf \"\$%.4f\", s
-  else printf \"\$%.2f\", s
+cost_fmt=$(awk "BEGIN {
+  c = $call_cost_raw
+  if (c == 0)      printf \"--\"
+  else if (c < 0.01) printf \"\$%.4f\", c
+  else               printf \"\$%.3f\", c
 }")
-budget_fmt="\$$(awk "BEGIN { printf \"%.0f\", $MONTHLY_BUDGET }")"
-# Green <= 50%, yellow 50-80%, red > 80%
-SPD_C=$(awk -v spend="$monthly_spend" -v budget="$MONTHLY_BUDGET" \
-  -v g="$C_GREEN" -v y="$C_YELLOW" -v r="$C_RED" \
-  'BEGIN { ratio = spend / budget; if (ratio >= 0.80) print r; else if (ratio >= 0.50) print y; else print g }')
-
-# --- YTD spend (field 5) ---
-ytd_fmt=$(awk "BEGIN {
-  s = $ytd_spend
-  if (s < 0.01) printf \"\$%.4f\", s
-  else printf \"\$%.2f\", s
-}")
-# Use same color thresholds as monthly spend but against annual budget (12x monthly)
-YTD_C=$(awk -v spend="$ytd_spend" -v budget="$MONTHLY_BUDGET" \
-  -v g="$C_GREEN" -v y="$C_YELLOW" -v r="$C_RED" \
-  'BEGIN { ratio = spend / (budget * 12); if (ratio >= 0.80) print r; else if (ratio >= 0.50) print y; else print g }')
+# Green < $0.10, red >= $0.10
+COST_C=$(awk -v c="$call_cost_raw" -v g="$C_GREEN" -v r="$C_RED" \
+  'BEGIN { if (c >= 0.10) print r; else print g }')
 
 # =============================================================
-# 5. Claude status — fetched from status.claude.com, cached 5 min
-# Uses the Atlassian Statuspage JSON API: /api/v2/summary.json
-# Indicator values: "none" = all good, anything else = incident/outage
+# 4. Session elapsed time (HH:MM) — cyan
+# Tracks session start by writing a timestamp keyed on session_id.
+# Schema: { "<session_id>": <unix_timestamp> }
 # =============================================================
-STATUS_CACHE="${HOME}/.claude/claude-status-cache.json"
-STATUS_TTL=300   # seconds (5 minutes)
+session_id=$(echo "$input" | jq -r '.session_id // ""')
 
-# Determine whether the cache is still fresh
-cache_valid=false
-if [ -f "$STATUS_CACHE" ]; then
-  cache_mtime=$(stat -f "%m" "$STATUS_CACHE" 2>/dev/null || stat -c "%Y" "$STATUS_CACHE" 2>/dev/null)
-  now=$(date +%s)
-  if [ -n "$cache_mtime" ] && [ $(( now - cache_mtime )) -lt $STATUS_TTL ]; then
-    cache_valid=true
-  fi
+if [ ! -f "$SESSIONS_FILE" ]; then
+  echo '{}' > "$SESSIONS_FILE"
 fi
 
-if [ "$cache_valid" = true ]; then
-  status_json=$(cat "$STATUS_CACHE" 2>/dev/null)
+if [ -n "$session_id" ]; then
+  session_start=$(jq -r --arg sid "$session_id" '.[$sid] // empty' \
+    "$SESSIONS_FILE" 2>/dev/null)
+  if [ -z "$session_start" ]; then
+    # First time we see this session — record start time
+    jq --arg sid "$session_id" --argjson ts "$now" \
+      '.[$sid] = $ts' "$SESSIONS_FILE" > "${SESSIONS_FILE}.tmp" 2>/dev/null \
+      && mv "${SESSIONS_FILE}.tmp" "$SESSIONS_FILE"
+    session_start=$now
+  fi
+  elapsed=$(( now - session_start ))
+  elapsed_h=$(( elapsed / 3600 ))
+  elapsed_m=$(( (elapsed % 3600) / 60 ))
+  elapsed_fmt=$(printf "%02d:%02d" "$elapsed_h" "$elapsed_m")
 else
-  status_json=$(curl -sf --max-time 3 \
-    "https://status.claude.com/api/v2/summary.json" 2>/dev/null)
-  if [ -n "$status_json" ]; then
-    echo "$status_json" > "$STATUS_CACHE"
+  elapsed_fmt="--:--"
+fi
+
+# Prune sessions older than 24 hours to keep the file small
+jq --argjson cutoff "$(( now - 86400 ))" \
+  'with_entries(select(.value > $cutoff))' \
+  "$SESSIONS_FILE" > "${SESSIONS_FILE}.tmp" 2>/dev/null \
+  && mv "${SESSIONS_FILE}.tmp" "$SESSIONS_FILE"
+
+# =============================================================
+# 5. Files changed in git — green if 0, red if > 0
+# =============================================================
+if [ "$files_changed" -gt 0 ] 2>/dev/null; then
+  FILES_C="$C_RED"
+  files_fmt="${files_changed} changed"
+else
+  FILES_C="$C_GREEN"
+  files_fmt="0 changed"
+fi
+
+# =============================================================
+# 6. Connected MCPs — blue
+# Reads the mcpServers keys from settings.json as the configured set.
+# The status line JSON does not expose runtime MCP connections,
+# so this reflects what is configured in ~/.claude/settings.json.
+# =============================================================
+mcp_str=""
+if [ -f "$SETTINGS_FILE" ]; then
+  mcp_names=$(jq -r '
+    (.mcpServers // {}) | keys[] ' \
+    "$SETTINGS_FILE" 2>/dev/null)
+  if [ -n "$mcp_names" ]; then
+    # Join names with commas, cap at 3 then append count if more
+    mcp_count=$(echo "$mcp_names" | wc -l | tr -d ' ')
+    if [ "$mcp_count" -le 3 ]; then
+      mcp_str=$(echo "$mcp_names" | tr '\n' ',' | sed 's/,$//')
+    else
+      first3=$(echo "$mcp_names" | head -3 | tr '\n' ',' | sed 's/,$//')
+      mcp_str="${first3} +$(( mcp_count - 3 ))"
+    fi
   else
-    # Fetch failed — use stale cache if available, otherwise mark unknown
-    status_json=$(cat "$STATUS_CACHE" 2>/dev/null)
+    mcp_str="none"
   fi
-fi
-
-# Parse: .status.indicator is "none" when all systems operational
-if [ -n "$status_json" ]; then
-  indicator=$(echo "$status_json" | jq -r '.status.indicator // "unknown"' 2>/dev/null)
-  # Also check for any active incidents as a secondary signal
-  incident_count=$(echo "$status_json" | jq '.incidents | length' 2>/dev/null)
 else
-  indicator="unknown"
-  incident_count=0
-fi
-
-if [ "$indicator" = "none" ] && [ "${incident_count:-0}" -eq 0 ]; then
-  claude_status="Systems Online"
-  STATUS_C="$C_GREEN"
-elif [ "$indicator" = "unknown" ]; then
-  claude_status="Status Unknown"
-  STATUS_C="$C_DIM"
-else
-  claude_status="Outage"
-  STATUS_C="$C_RED"
+  mcp_str="none"
 fi
 
 # =============================================================
@@ -185,9 +141,9 @@ fi
 sep="$(printf " ${C_DIM}|${C_RESET} ")"
 parts=()
 
-# 1. Git branch
-if [ -n "$git_branch" ]; then
-  parts+=("$(printf "${C_CYAN}\ue0a0 %s${C_RESET}" "$git_branch")")
+# 1. Commit hash
+if [ -n "$commit_hash" ]; then
+  parts+=("$(printf "${C_DIM}%s${C_RESET}" "$commit_hash")")
 else
   parts+=("$(printf "${C_DIM}no git${C_RESET}")")
 fi
@@ -195,17 +151,17 @@ fi
 # 2. Model
 parts+=("$(printf "${C_YELLOW}%s${C_RESET}" "$model")")
 
-# 3. Balance
-parts+=("$(printf "${BAL_C}%s left${C_RESET}" "$balance_fmt")")
+# 3. Token cost
+parts+=("$(printf "${COST_C}%s${C_RESET}" "$cost_fmt")")
 
-# 4. Monthly spend vs budget
-parts+=("$(printf "${SPD_C}%s/%s${C_RESET}" "$spend_fmt" "$budget_fmt")")
+# 4. Session elapsed time
+parts+=("$(printf "${C_CYAN}%s${C_RESET}" "$elapsed_fmt")")
 
-# 5. YTD spend
-parts+=("$(printf "${YTD_C}%s ytd${C_RESET}" "$ytd_fmt")")
+# 5. Files changed
+parts+=("$(printf "${FILES_C}%s${C_RESET}" "$files_fmt")")
 
-# 6. Claude status
-parts+=("$(printf "${STATUS_C}%s${C_RESET}" "$claude_status")")
+# 6. MCPs
+parts+=("$(printf "${C_BLUE}mcp:%s${C_RESET}" "$mcp_str")")
 
 result=""
 for part in "${parts[@]}"; do
