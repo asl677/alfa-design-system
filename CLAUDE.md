@@ -45,8 +45,8 @@ Design [feature] following these principles...
 - Share specific sections with designers
 
 ### In Projects
-See project-specific design docs:
-- **alexlakas-portfolio** — `~/alexlakas-portfolio/DESIGN.md`
+Reference the portfolio implementation:
+- **alexlakas-portfolio** — `~/alexlakas-portfolio/CLAUDE.md` (see real-world examples)
 
 ## Design System Principles
 
@@ -54,7 +54,7 @@ This system covers:
 - **Color tokens** — Consistent palette across projects
 - **Typography** — Font selection and hierarchy
 - **Spacing & Layout** — Grid and component sizing
-- **Animation** — Motion patterns and timing
+- **Animation** — Motion patterns and timing (see [GSAP Best Practices](../GSAP-BEST-PRACTICES.md) for implementation)
 - **Components** — Reusable UI patterns
 
 ## General Claude Code Settings
