@@ -1,21 +1,36 @@
-# Design System
+# Alfa Design System
 
-A comprehensive design system and best practices guide for use across Pencil, Git, Figma, v0, and other tools.
+General-purpose design system and best practices for UI, animation, and design patterns. Use across projects, tools (Pencil, Figma, v0), and as context for Claude chats.
 
 ## Files
 
-- **CLAUDE.md** — General Claude Code best practices for UI, animation, and design patterns
-- **DESIGN-SYSTEM.md** — Design tokens, color systems, typography, and component guidelines
+- **CLAUDE.md** — Base Claude Code best practices (general workflow, statusline, settings)
+- **DESIGN-SYSTEM.md** — Design tokens, color systems, typography, component guidelines
 
 ## Usage
 
-Use these files as context when designing in Pencil, Figma, v0, or collaborating in Claude chats.
+### As Design Context
 
-Reference these files in your design workflow by:
-- Copying their content into Claude chat prompts
-- Using them as design briefs for new projects
-- Sharing with team members for consistency
+Copy files into Claude chat as design briefs:
+```
+Use this design system as a reference:
+
+[paste DESIGN-SYSTEM.md content here]
+
+Design [feature] following these principles...
+```
+
+### As Project Reference
+
+Share with designers and developers for consistency across projects:
+- Use color palette from DESIGN-SYSTEM.md
+- Apply spacing/typography rules
+- Follow animation guidelines
+
+## Project-Specific Design Systems
+
+- **alexlakas-portfolio** — `~/alexlakas-portfolio/DESIGN.md` (portfolio-specific rules)
 
 ## Versioning
 
-All changes to design principles are tracked in git, making it easy to see design evolution and maintain consistency across projects.
+All changes tracked in git for design evolution and consistency.
