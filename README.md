@@ -11,43 +11,11 @@ A comprehensive design system and best practices guide for use across Pencil, Gi
 
 Use these files as context when designing in Pencil, Figma, v0, or collaborating in Claude chats.
 
----
+Reference these files in your design workflow by:
+- Copying their content into Claude chat prompts
+- Using them as design briefs for new projects
+- Sharing with team members for consistency
 
-## Claude Code Statusline
+## Versioning
 
-Real-time dynamic statusline showing git, model, tokens, session time, files, and MCPs.
-
-### Quick Setup
-
-```bash
-bash setup-statusline.sh
-```
-
-### What it shows
-
-```
-a3f92b1 | Claude Haiku 3.5 | $0.0041 | 00:23 | 3 changed | mcp:pencil
-```
-
-Fields (left to right):
-- Last commit ID (7-char hash) — dim
-- Claude model name — yellow
-- Token cost of last command — green/red
-- Session elapsed time — cyan
-- Files changed in git — red/green
-- Connected MCPs — blue
-
-### Dynamic Updates
-
-- **Commit hash** — updates when you switch directories
-- **Model** — from current Claude Code session
-- **Token cost** — computed from API response
-- **Session time** — tracked automatically
-- **Files changed** — git diff vs HEAD
-- **MCPs** — from settings.json configuration
-
-### Files
-
-- **statusline-command.sh** — the statusline script
-- **session-starts.json** — session timing data
-- **setup-statusline.sh** — one-command installer
+All changes to design principles are tracked in git, making it easy to see design evolution and maintain consistency across projects.
