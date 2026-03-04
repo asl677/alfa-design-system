@@ -1,6 +1,15 @@
-# CLAUDE.md
+# CLAUDE.md — Alfa Design System
 
 Alfa Design System — Claude Code guidance for design work with this system.
+
+## Documentation Navigation
+
+| Document | Purpose |
+|----------|---------|
+| **[DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md)** | Color tokens, typography, spacing, animation guidelines |
+| **[Base CLAUDE.md](../CLAUDE.md)** | General Claude Code settings & workflow |
+| **[GSAP Best Practices](../GSAP-BEST-PRACTICES.md)** | Animation patterns (ScrollTrigger, SplitText, timelines) |
+| **[Portfolio CLAUDE.md](../alexlakas-portfolio/CLAUDE.md)** | Portfolio-specific implementation & architecture |
 
 ## Repository
 
