@@ -9,7 +9,6 @@ Alfa Design System — Claude Code guidance for design work with this system.
 | **[DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md)** | Color tokens, typography, spacing, animation guidelines |
 | **[Base CLAUDE.md](../CLAUDE.md)** | General Claude Code settings & workflow |
 | **[GSAP Best Practices](../GSAP-BEST-PRACTICES.md)** | Animation patterns (ScrollTrigger, SplitText, timelines) |
-| **[Portfolio CLAUDE.md](../alexlakas-portfolio/CLAUDE.md)** | Portfolio-specific implementation & architecture |
 
 ## Repository
 
@@ -43,10 +42,6 @@ Design [feature] following these principles...
 - Reference color palette and spacing rules in Pencil, Figma, v0
 - Link to this repo for team context
 - Share specific sections with designers
-
-### In Projects
-Reference the portfolio implementation:
-- **alexlakas-portfolio** — `~/alexlakas-portfolio/CLAUDE.md` (see real-world examples)
 
 ## Design System Principles
 
